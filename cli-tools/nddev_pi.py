@@ -27,6 +27,14 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, NoReturn
 
+sys.dont_write_bytecode = True
+CLI_TOOLS_ROOT = Path(__file__).resolve().parent
+if str(CLI_TOOLS_ROOT) not in sys.path:
+    sys.path.insert(0, str(CLI_TOOLS_ROOT))
+
+import provider_protocol_v3 as provider_wire_v3  # noqa: E402
+import provider_runtime_v3  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG_ROOT = ROOT / "setups"
 PROFILES_ROOT = ROOT / "profiles"
@@ -41,9 +49,29 @@ AGENTS_REL = Path("agent") / "AGENTS.md"
 AGENTS_NAME = AGENTS_REL.as_posix()
 STAMP_NAME = "NDDEV-PI-SETUP.json"
 BACKUP_NAME = "NDDEV-PI-BACKUP.json"
+PROVIDER_STATE_NAME = "NDDEV-PI-PROVIDER.json"
+PROVIDER_BACKUP_DIRECTORY = ".nddev-pi-provider-backups"
 OWNER_FILE_MODE = 0o600
 OWNER_DIRECTORY_MODE = 0o700
 METADATA_MAX_BYTES = 256 * 1024
+PROVIDER_V3 = provider_runtime_v3.Runtime(
+    provider_runtime_v3.Config(
+        root=ROOT,
+        provider_id=PRODUCT_NAME,
+        harness_id="pi",
+        provider_version=VERSION,
+        state_name=PROVIDER_STATE_NAME,
+        backup_directory=PROVIDER_BACKUP_DIRECTORY,
+        component_kinds=frozenset({"instruction", "skill", "plugin", "setting"}),
+        native_namespaces=frozenset(
+            {"agent/AGENTS.md", "agent/settings.json", "agent/skills", "agent/packages"}
+        ),
+        projection_kinds=("native_files", "package"),
+        syntax_by_path=(("agent/settings.json", "json"),),
+        required_members=(("skill", "SKILL.md"), ("plugin", "package.json")),
+        permission_profiles=("safe", "full-auto"),
+    )
+)
 # Cleanup intent/journal documents snapshot the full target-owned software
 # tree (e.g. a transitive npm node_modules install), which routinely exceeds
 # the 256 KiB metadata bound. Give the cleanup serialization surface its own
@@ -600,7 +628,10 @@ def read_regular_file(
         os.close(descriptor)
     final = require_regular_file(path, label, max_bytes=max_bytes)
     expected = (before.st_dev, before.st_ino)
-    if (after.st_dev, after.st_ino) != expected or (final.st_dev, final.st_ino) != expected:
+    if (after.st_dev, after.st_ino) != expected or (
+        final.st_dev,
+        final.st_ino,
+    ) != expected:
         fail(f"{label} changed while it was being read")
     return b"".join(blocks)
 
@@ -1408,7 +1439,10 @@ def open_anchor_no_create(
     exclusive: bool,
     recover_alias: bool,
 ) -> ExternalLock:
-    flags = os.O_RDWR
+    # A shared observation never mutates or repairs the anchor.  Opening it
+    # read-only keeps provider ``status`` usable inside ai_stp's read-only
+    # filesystem + network-denied sandbox while retaining the kernel flock.
+    flags = os.O_RDWR if exclusive or recover_alias else os.O_RDONLY
     if hasattr(os, "O_CLOEXEC"):
         flags |= os.O_CLOEXEC
     if hasattr(os, "O_NOFOLLOW"):
@@ -1877,7 +1911,11 @@ def restore_directory_metadata(
         if os.utime in os.supports_fd:
             os.utime(descriptor, ns=(expected["atime_ns"], expected["mtime_ns"]))
         else:
-            os.utime(path, ns=(expected["atime_ns"], expected["mtime_ns"]), follow_symlinks=False)
+            os.utime(
+                path,
+                ns=(expected["atime_ns"], expected["mtime_ns"]),
+                follow_symlinks=False,
+            )
     finally:
         os.close(descriptor)
 
@@ -2078,7 +2116,10 @@ def snapshot_cleanup_tree(path: Path, label: str) -> dict[str, Any]:
     entries: list[dict[str, Any]] = []
     total = 0
     if stat.S_ISDIR(root_info.st_mode):
-        paths = [path, *sorted(path.rglob("*"), key=lambda item: item.relative_to(path).as_posix())]
+        paths = [
+            path,
+            *sorted(path.rglob("*"), key=lambda item: item.relative_to(path).as_posix()),
+        ]
     else:
         paths = [path]
     if len(paths) > CLEANUP_MAX_OBJECTS:
@@ -2997,7 +3038,9 @@ def cleanup_replacements_present(target: Path, replacements: list[dict[str, Any]
             source.parent, replacement["source_parent"], "cleanup replacement"
         )
         validate_cleanup_tree(
-            source, replacement["snapshot"], f"cleanup replacement {replacement['purpose']}"
+            source,
+            replacement["snapshot"],
+            f"cleanup replacement {replacement['purpose']}",
         )
     return True
 
@@ -4682,7 +4725,9 @@ def read_software_stamp(target: Path) -> dict[str, Any] | None:
         stamp["node_runtime"], SOFTWARE_STAMP_NODE_KEYS, "software stamp node_runtime"
     )
     require_exact_keys(
-        stamp["version_probe"], SOFTWARE_STAMP_PROBE_KEYS, "software stamp version_probe"
+        stamp["version_probe"],
+        SOFTWARE_STAMP_PROBE_KEYS,
+        "software stamp version_probe",
     )
     require_exact_keys(
         stamp["official_package_scripts"],
@@ -4692,7 +4737,9 @@ def read_software_stamp(target: Path) -> dict[str, Any] | None:
     installer = stamp["installer"]
     require_exact_keys(installer, SOFTWARE_STAMP_INSTALLER_KEYS, "software stamp installer")
     require_exact_keys(
-        installer["env"], SOFTWARE_STAMP_INSTALLER_ENV_KEYS, "software stamp installer env"
+        installer["env"],
+        SOFTWARE_STAMP_INSTALLER_ENV_KEYS,
+        "software stamp installer env",
     )
     if stamp.get("product_name") != PRODUCT_NAME:
         fail("software stamp belongs to another product")
@@ -5136,7 +5183,9 @@ def install_or_update_software(target: Path, *, update: bool) -> dict[str, Any]:
                     lifecycle_hook("software.current.rename.after")
                     fsync_directory(current.parent, "current software parent")
                     validate_cleanup_tree(
-                        current, replacements[0]["snapshot"], "software current replacement"
+                        current,
+                        replacements[0]["snapshot"],
+                        "software current replacement",
                     )
                     staged_entrypoint_file.rename(software_entrypoint(target))
                     lifecycle_hook("software.entrypoint.rename.after")
@@ -5394,12 +5443,28 @@ def build_parser() -> argparse.ArgumentParser:
     launch_parser.add_argument("--json", action="store_true")
     launch_parser.add_argument("forwarded", nargs=argparse.REMAINDER)
 
-    for command in ("software-plan", "software-status", "software-install", "software-update"):
+    for command in (
+        "software-plan",
+        "software-status",
+        "software-install",
+        "software-update",
+    ):
         command_parser = subparsers.add_parser(command)
         command_parser.add_argument("--target")
         command_parser.add_argument("--json", action="store_true")
 
+    provider_runtime_v3.add_commands(
+        subparsers,
+        add_provider_target,
+        permission_profiles=True,
+    )
+
     return parser
+
+
+def add_provider_target(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--target", required=True)
+    parser.add_argument("--json", action="store_true")
 
 
 def require_setup_argument(setup_id: str | None) -> str:
@@ -5434,15 +5499,45 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     json_enabled = bool(getattr(args, "json", False))
     try:
+        if args.command == "provider-info":
+            emit(PROVIDER_V3.info(), True)
+            return 0
+        if args.command in {
+            "validate-bundle",
+            "plan-operation",
+            "apply-operation",
+            "recover-operation",
+        }:
+            target = lexical_target(args.target)
+            if args.command == "validate-bundle":
+                payload = PROVIDER_V3.validate(args)
+            elif args.command == "plan-operation":
+                payload = PROVIDER_V3.plan(target, args)
+            elif args.command == "apply-operation":
+                payload = PROVIDER_V3.apply(target, args)
+            else:
+                payload = PROVIDER_V3.recover(target)
+            emit(payload, True)
+            return 0
         host = require_supported_host()
         if args.command == "list":
-            emit({"setups": list_setups(), "profiles": list_profiles(), "host": host}, json_enabled)
-            return 0
-        if args.command == "status":
             emit(
-                read_only_target(lexical_target(args.target), status_for_target),
+                {"setups": list_setups(), "profiles": list_profiles(), "host": host},
                 json_enabled,
             )
+            return 0
+        if args.command == "status":
+            target = lexical_target(args.target)
+            provider_status = PROVIDER_V3.status(target)
+            if provider_status["state"] in {
+                "managed",
+                "recovery_required",
+            } or provider_status.get("cleanup_state"):
+                emit(provider_status, json_enabled)
+            else:
+                legacy = read_only_target(target, status_for_target)
+                legacy["target_digest"] = provider_status["target_digest"]
+                emit(legacy, json_enabled)
             return 0
         if args.command == "plan":
             emit(
@@ -5496,15 +5591,31 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "software-install":
             emit(
-                install_or_update_software(lexical_target(args.target), update=False), json_enabled
+                install_or_update_software(lexical_target(args.target), update=False),
+                json_enabled,
             )
             return 0
         if args.command == "software-update":
-            emit(install_or_update_software(lexical_target(args.target), update=True), json_enabled)
+            emit(
+                install_or_update_software(lexical_target(args.target), update=True),
+                json_enabled,
+            )
             return 0
-    except PiSetupError as exc:
+    except (PiSetupError, provider_wire_v3.ProtocolError) as exc:
         if json_enabled:
-            emit({"error": str(exc)}, True)
+            payload = {"error": str(exc)}
+            if isinstance(exc, provider_wire_v3.ProtocolError):
+                payload.update({"rejected": True, "reason": exc.reason})
+                if getattr(args, "command", None) == "validate-bundle":
+                    payload.update(
+                        {
+                            "bundle_format": args.bundle_format,
+                            "bundle_digest": args.bundle_digest,
+                            "artifact_digest": args.artifact_digest,
+                            "bundle_size": args.bundle_size,
+                        }
+                    )
+            emit(payload, True)
         else:
             print(f"nddev_pi.py: error: {exc}", file=sys.stderr)
         return 2
