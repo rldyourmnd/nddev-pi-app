@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import re
+import stat
 import sys
 from pathlib import Path
 from typing import Any
@@ -98,13 +99,21 @@ def validate_catalog(errors: list[str]) -> None:
     setup_dirs = sorted(path.name for path in (ROOT / "setups").iterdir() if path.is_dir())
     profile_dirs = sorted(path.name for path in (ROOT / "profiles").iterdir() if path.is_dir())
     require(setup_dirs == SETUP_IDS, "setups/: unexpected setup catalog", errors)
-    require(profile_dirs == sorted(PROFILE_IDS), "profiles/: unexpected profile catalog", errors)
+    require(
+        profile_dirs == sorted(PROFILE_IDS),
+        "profiles/: unexpected profile catalog",
+        errors,
+    )
     defaults: list[str] = []
     for profile_id in PROFILE_IDS:
         profile = read_json(f"profiles/{profile_id}/profile.json", errors)
         if profile is None:
             continue
-        require(profile.get("id") == profile_id, f"profiles/{profile_id}: id mismatch", errors)
+        require(
+            profile.get("id") == profile_id,
+            f"profiles/{profile_id}: id mismatch",
+            errors,
+        )
         require(
             isinstance(profile.get("launch_args"), list),
             f"profiles/{profile_id}: launch_args missing",
@@ -112,7 +121,11 @@ def validate_catalog(errors: list[str]) -> None:
         )
         if profile.get("default") is True:
             defaults.append(profile_id)
-    require(defaults == ["full-auto"], "profiles/: full-auto must be the only default", errors)
+    require(
+        defaults == ["full-auto"],
+        "profiles/: full-auto must be the only default",
+        errors,
+    )
 
 
 def validate_contracts(errors: list[str]) -> None:
@@ -139,10 +152,22 @@ def validate_contracts(errors: list[str]) -> None:
         "baseline currentness observation must remain private",
         errors,
     )
-    require(SEMVER.fullmatch(version_text) is not None, "VERSION: invalid semantic version", errors)
-    require(set(version) == REQUIRED_VERSION_KEYS, "build/version.json: key mismatch", errors)
+    require(
+        SEMVER.fullmatch(version_text) is not None,
+        "VERSION: invalid semantic version",
+        errors,
+    )
+    require(
+        set(version) == REQUIRED_VERSION_KEYS,
+        "build/version.json: key mismatch",
+        errors,
+    )
     require(version.get("build_version") == version_text, "build version mismatch", errors)
-    require(manifest.get("build_version") == version_text, "manifest version mismatch", errors)
+    require(
+        manifest.get("build_version") == version_text,
+        "manifest version mismatch",
+        errors,
+    )
     require(
         package.get("version") == version.get("nddev_builder_package_version"),
         "builder package version mismatch",
@@ -185,7 +210,11 @@ def validate_contracts(errors: list[str]) -> None:
         errors,
     )
     require(setup.get("id") == "nddev-builder", "setup id mismatch", errors)
-    require(setup.get("managed_files") == MANAGED_FILES, "setup managed files mismatch", errors)
+    require(
+        setup.get("managed_files") == MANAGED_FILES,
+        "setup managed files mismatch",
+        errors,
+    )
     require(
         settings.get("skills") == [],
         "settings source skills must be projected by the manager",
@@ -221,7 +250,11 @@ def validate_contracts(errors: list[str]) -> None:
 
 def validate_release_and_runtime_integrity(errors: list[str]) -> None:
     release = (ROOT / "release/package.yml").read_text(encoding="utf-8")
-    require("package_name: nddev-pi-app" in release, "release package identity mismatch", errors)
+    require(
+        "package_name: nddev-pi-app" in release,
+        "release package identity mismatch",
+        errors,
+    )
     required_roots = {
         "README.md",
         "LICENSE",
@@ -254,11 +287,15 @@ def validate_release_and_runtime_integrity(errors: list[str]) -> None:
         "PI_CODING_AGENT_DIR",
     ):
         require(
-            fragment in manager, f"manager runtime-integrity fragment missing: {fragment}", errors
+            fragment in manager,
+            f"manager runtime-integrity fragment missing: {fragment}",
+            errors,
         )
     for fragment in ("plugin_marketplace", "marketplace.json", "default target"):
         require(
-            fragment not in manager, f"manager contains unsupported surface: {fragment}", errors
+            fragment not in manager,
+            f"manager contains unsupported surface: {fragment}",
+            errors,
         )
 
 
@@ -294,7 +331,62 @@ def validate_public_instruction_surface(errors: list[str]) -> None:
         )
     bridge = ROOT / ".claude/CLAUDE.md"
     if bridge.is_file() and not bridge.is_symlink():
-        require(bridge.read_bytes() == b"@../AGENTS.md\n", "Claude bridge is invalid", errors)
+        require(
+            bridge.read_bytes() == b"@../AGENTS.md\n",
+            "Claude bridge is invalid",
+            errors,
+        )
+
+
+def validate_provider_protocol(errors: list[str]) -> None:
+    require(
+        stat.S_IMODE((ROOT / "cli-tools/nddev_pi.py").stat().st_mode) == 0o755,
+        "provider manager must be executable with mode 0755",
+        errors,
+    )
+    contract = read_json("config/nddev-contract.json", errors)
+    manifest = read_json("build/manifest.json", errors)
+    expected_commands = [
+        "provider-info",
+        "validate-bundle",
+        "plan-operation",
+        "apply-operation",
+        "status",
+    ]
+    for label, document in (("contract", contract), ("manifest", manifest)):
+        provider = document.get("provider_protocol") if isinstance(document, dict) else None
+        require(
+            isinstance(provider, dict),
+            f"{label}: provider_protocol is required",
+            errors,
+        )
+        if not isinstance(provider, dict):
+            continue
+        require(provider.get("version") == 3, f"{label}: provider version mismatch", errors)
+        require(
+            provider.get("bundle_format") == "ai-stp-bundle/1",
+            f"{label}: provider bundle format mismatch",
+            errors,
+        )
+        require(
+            provider.get("commands") == expected_commands,
+            f"{label}: commands mismatch",
+            errors,
+        )
+    for relative in (
+        "cli-tools/provider_protocol_v3.py",
+        "cli-tools/provider_runtime_v3.py",
+    ):
+        require(
+            (ROOT / relative).is_file(),
+            f"provider runtime file missing: {relative}",
+            errors,
+        )
+    require(
+        not (ROOT / ".github/workflows").exists(),
+        "public Actions workflows are forbidden",
+        errors,
+    )
 
 
 def main() -> int:
@@ -304,6 +396,7 @@ def main() -> int:
     validate_contracts(errors)
     validate_release_and_runtime_integrity(errors)
     validate_public_instruction_surface(errors)
+    validate_provider_protocol(errors)
     if errors:
         for error in errors:
             print(f"ERROR: {error}", file=sys.stderr)

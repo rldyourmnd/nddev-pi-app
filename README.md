@@ -30,6 +30,20 @@ python3 cli-tools/nddev_pi.py software-update --target /absolute/pi-target
 python3 cli-tools/nddev_pi.py launch --target /absolute/pi-target [--workspace /absolute/project] -- --help
 ```
 
+## ai_stp provider protocol
+
+The manager implements provider protocol v3 through `provider-info`,
+`validate-bundle`, `plan-operation`, and `apply-operation`. Prepared and composed
+setups use one deterministic HarnessBundle and the same pure plan, exact
+confirmation, locked apply, verified status, backup, restore, and
+ownership-scoped removal path. Provider state persists exact setup/component,
+bundle, provider-release, approved-plan, target, and native-projection identity.
+
+Pi bundles are limited to its owned instruction, setting, skill, and local
+package/plugin projections. MCP, hook, standalone command, and agent components
+fail closed before plan creation or target mutation. The standalone Pi software
+and launch lifecycle remains capability-separated from bundle materialization.
+
 `software-install` uses Pi's reproducible npm package channel in an isolated
 staging directory. The exact package pin, npm argv, integrity, staged layout,
 and consumer lifecycle-script policy are owned by the public machine contract
@@ -43,7 +57,7 @@ they are not copied into target files. The target is not the project workspace:
 when `--workspace` is omitted, launch captures the caller's current working
 directory once and passes it as the child process `cwd`. An explicit
 `--workspace` must be an absolute existing directory whose final component is
-not a symlink. Pi `0.82.1` does not expose a native workspace, project, or cwd
+not a symlink. The tested Pi `0.84.1` CLI does not expose a native workspace, project, or cwd
 flag, so the manager does not inject one and rejects forwarded scope overrides.
 
 ## Setup And Profiles

@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "build_version": "0.1.2",
+  "build_version": "0.2.0",
   "python_requires": ">=3.9",
   "pi_product_name": "Pi Coding Agent",
   "pi_package_name": "@earendil-works/pi-coding-agent",

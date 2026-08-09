@@ -259,6 +259,19 @@
       "plugin_marketplace": null
     }
   },
+  "provider_protocol": {
+    "version": 3,
+    "bundle_format": "ai-stp-bundle/1",
+    "commands": ["provider-info", "validate-bundle", "plan-operation", "apply-operation", "status"],
+    "operations": ["backup", "install", "remove", "replace", "restore"],
+    "permission_profiles": ["safe", "full-auto"],
+    "component_kinds": ["instruction", "plugin", "setting", "skill"],
+    "unsupported_component_kinds": ["agent", "command", "hook", "mcp"],
+    "native_namespaces": ["agent/AGENTS.md", "agent/packages", "agent/settings.json", "agent/skills"],
+    "state_file": "NDDEV-PI-PROVIDER.json",
+    "exact_provenance": ["setup_passport_digest", "component_refs", "bundle_digest", "artifact_digest", "provider_release_digest", "plan_digest", "target_identity_digest", "native_ownership"],
+    "optional_standalone_lifecycle": ["software-plan", "software-status", "software-install", "software-update", "launch"]
+  },
   "safety": {
     "absolute_target_required": true,
     "canonical_target_binding": true,

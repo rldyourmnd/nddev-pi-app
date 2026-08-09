@@ -16,7 +16,7 @@ The target is a configuration/runtime home, not the project workspace. Managed
 launch selects the workspace independently: `--workspace` must name an absolute
 existing directory whose final component is not a symlink, and omitting it
 captures the caller's current working directory once. The resolved workspace is
-passed as the child process `cwd`. Official Pi `0.82.1` CLI grammar does not
+passed as the child process `cwd`. The tested Pi `0.84.1` CLI grammar does not
 provide a native workspace, project, or cwd flag, so the manager uses process
 `cwd` only and blocks forwarded scope overrides.
 
