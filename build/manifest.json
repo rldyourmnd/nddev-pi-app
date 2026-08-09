@@ -257,7 +257,7 @@
   "provider_protocol": {
     "version": 3,
     "bundle_format": "ai-stp-bundle/1",
-    "commands": ["provider-info", "validate-bundle", "plan-operation", "apply-operation", "status"],
+    "commands": ["provider-info", "validate-bundle", "plan-operation", "apply-operation", "recover-operation", "status"],
     "operations": ["backup", "install", "remove", "replace", "restore"],
     "permission_profiles": ["safe", "full-auto"],
     "component_kinds": ["instruction", "plugin", "setting", "skill"],

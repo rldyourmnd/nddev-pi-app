@@ -10,6 +10,8 @@
   commands, and agents remain fail-closed unsupported surfaces.
 - Updated launch documentation to bind its workspace-scope rationale to the
   current tested Pi Coding Agent 0.84.1 source.
+- Add durable crash recovery and require valid Pi settings, complete skill
+  trees, and package manifests before a bundle can be planned or applied.
 
 ## [0.1.2] - 2026-08-08
 

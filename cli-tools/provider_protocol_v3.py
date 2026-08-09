@@ -29,6 +29,7 @@ CORE_COMMANDS: Final[tuple[str, ...]] = (
     "validate-bundle",
     "plan-operation",
     "apply-operation",
+    "recover-operation",
     "status",
 )
 OPTIONAL_COMMANDS: Final[tuple[str, ...]] = ("launch",)
@@ -152,6 +153,7 @@ class BundleIdentity:
     manifest: dict[str, Any]
     setup_passport: dict[str, Any]
     components: tuple[dict[str, str], ...]
+    conversions: tuple[dict[str, str], ...]
     owned_files: tuple[dict[str, Any], ...]
 
     def echoes(self) -> dict[str, Any]:
@@ -293,6 +295,7 @@ def validate_bundle(
         if not isinstance(entries, list):
             refuse("unsupported_native_surface", "bundle conversion entries are missing")
         converted_ids: list[str] = []
+        conversions: list[dict[str, str]] = []
         for entry in entries:
             if not isinstance(entry, dict):
                 refuse("unsupported_native_surface", "bundle conversion entry is invalid")
@@ -315,6 +318,20 @@ def validate_bundle(
                     "unsupported_native_surface",
                     f"native surface is unsupported: {surface}",
                 )
+            projection_kind = entry.get("projection_kind", "native_files")
+            if projection_kind not in PROJECTION_KINDS:
+                refuse(
+                    "unsupported_native_surface",
+                    f"projection kind is unsupported: {projection_kind}",
+                )
+            conversions.append(
+                {
+                    "stable_id": stable_id,
+                    "component_type": str(kind),
+                    "native_surface": str(surface),
+                    "projection_kind": str(projection_kind),
+                }
+            )
         if len(converted_ids) != len(set(converted_ids)):
             refuse("path_duplicate", "bundle conversion repeats a component identity")
         raw_files = manifest.get("files")
@@ -443,6 +460,9 @@ def validate_bundle(
             refuse("digest_mismatch", "conversion report differs from exact components")
         if any(item["owner"] not in set(component_ids) for item in owned):
             refuse("digest_mismatch", "managed file owner is not an exact component")
+        owned_component_ids = {item["owner"] for item in owned}
+        if owned_component_ids != set(component_ids):
+            refuse("digest_mismatch", "every exact component must own native bundle content")
         chosen = composition.get("chosen")
         if not isinstance(chosen, list):
             refuse("digest_mismatch", "composition report choices are missing")
@@ -462,6 +482,7 @@ def validate_bundle(
             manifest=manifest,
             setup_passport=passport,
             components=tuple(exact_components),
+            conversions=tuple(conversions),
             owned_files=tuple(owned),
         )
 
@@ -551,6 +572,7 @@ def plan_artifact(
     projection_profile_digest: str,
     bundle: BundleIdentity | None,
     backup_ref: str | None,
+    restore_target_digest: str | None,
     permission_profile: str | None,
     effects: tuple[str, ...],
     expires_at: str,
@@ -561,6 +583,10 @@ def plan_artifact(
         refuse("digest_mismatch", "install and replace require an exact bundle")
     if operation == "restore" and not backup_ref:
         refuse("backup_ref_invalid", "restore requires an exact BackupRef")
+    if operation == "restore":
+        require_digest(str(restore_target_digest or ""), "restore_target_digest")
+    elif restore_target_digest is not None:
+        refuse("plan_invalid", "only restore may bind a restored target digest")
     require_digest(provider_build_digest, "provider_build_digest")
     require_digest(provider_release_digest, "provider_release_digest")
     require_digest(expected_target_digest, "expected_target_digest")
@@ -581,6 +607,7 @@ def plan_artifact(
         "projection_profile_digest": projection_profile_digest,
         "bundle": None if bundle is None else bundle.echoes(),
         "backup_ref": backup_ref,
+        "restore_target_digest": restore_target_digest,
         "permission_profile": permission_profile,
         "platform": canonical_platform(),
         "expires_at": expires_at,

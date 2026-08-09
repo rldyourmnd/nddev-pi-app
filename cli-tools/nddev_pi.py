@@ -66,6 +66,9 @@ PROVIDER_V3 = provider_runtime_v3.Runtime(
         native_namespaces=frozenset(
             {"agent/AGENTS.md", "agent/settings.json", "agent/skills", "agent/packages"}
         ),
+        projection_kinds=("native_files", "package"),
+        syntax_by_path=(("agent/settings.json", "json"),),
+        required_members=(("skill", "SKILL.md"), ("plugin", "package.json")),
         permission_profiles=("safe", "full-auto"),
     )
 )
@@ -5499,14 +5502,21 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "provider-info":
             emit(PROVIDER_V3.info(), True)
             return 0
-        if args.command in {"validate-bundle", "plan-operation", "apply-operation"}:
+        if args.command in {
+            "validate-bundle",
+            "plan-operation",
+            "apply-operation",
+            "recover-operation",
+        }:
             target = lexical_target(args.target)
             if args.command == "validate-bundle":
                 payload = PROVIDER_V3.validate(args)
             elif args.command == "plan-operation":
                 payload = PROVIDER_V3.plan(target, args)
-            else:
+            elif args.command == "apply-operation":
                 payload = PROVIDER_V3.apply(target, args)
+            else:
+                payload = PROVIDER_V3.recover(target)
             emit(payload, True)
             return 0
         host = require_supported_host()
@@ -5519,7 +5529,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "status":
             target = lexical_target(args.target)
             provider_status = PROVIDER_V3.status(target)
-            if provider_status["state"] == "managed":
+            if provider_status["state"] in {
+                "managed",
+                "recovery_required",
+            } or provider_status.get("cleanup_state"):
                 emit(provider_status, json_enabled)
             else:
                 legacy = read_only_target(target, status_for_target)

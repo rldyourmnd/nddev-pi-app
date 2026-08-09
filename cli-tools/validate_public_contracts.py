@@ -351,6 +351,7 @@ def validate_provider_protocol(errors: list[str]) -> None:
         "validate-bundle",
         "plan-operation",
         "apply-operation",
+        "recover-operation",
         "status",
     ]
     for label, document in (("contract", contract), ("manifest", manifest)):
