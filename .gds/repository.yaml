@@ -52,3 +52,4 @@ module:
     github_release: "required"
 release:
   mode: "github-release"
+  tag_style: "semver"
