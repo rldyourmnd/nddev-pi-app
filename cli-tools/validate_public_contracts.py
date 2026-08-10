@@ -383,11 +383,38 @@ def validate_provider_protocol(errors: list[str]) -> None:
             f"provider runtime file missing: {relative}",
             errors,
         )
+    workflows = ROOT / ".github" / "workflows"
     require(
-        not (ROOT / ".github/workflows").exists(),
-        "public Actions workflows are forbidden",
+        workflows.is_dir(),
+        "required release-check workflow directory is missing",
         errors,
     )
+    if workflows.is_dir():
+        workflow_files = {path.name for path in workflows.iterdir() if path.is_file()}
+        require(
+            workflow_files == {"test.yml"},
+            "public repository may contain only the release-check test.yml workflow",
+            errors,
+        )
+        if workflow_files == {"test.yml"}:
+            workflow = (workflows / "test.yml").read_text(encoding="utf-8")
+            for fragment in (
+                "permissions:\n  contents: read",
+                "runs-on: ubuntu-24.04",
+                "name: test",
+                "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "run: python3 cli-tools/validate_public_contracts.py",
+            ):
+                require(
+                    fragment in workflow,
+                    f"test.yml is missing required release-check fragment: {fragment!r}",
+                    errors,
+                )
+            require(
+                "pull_request_target" not in workflow and "${{ secrets" not in workflow,
+                "test.yml may not use privileged PR triggers or repository secrets",
+                errors,
+            )
 
 
 def main() -> int:

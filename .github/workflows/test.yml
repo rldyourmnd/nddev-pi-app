@@ -21,5 +21,5 @@ jobs:
     steps:
       - name: Check out exact source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Validate provider contract
-        run: python3 -m json.tool config/nddev-contract.json >/dev/null
+      - name: Validate public contracts
+        run: python3 cli-tools/validate_public_contracts.py
