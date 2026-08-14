@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.serena/
+*.log
+*.tmp
+
+# Runtime state this manager creates. Derived from cli-tools/nddev_pi.py, never
+# copied from a sibling module: the names are product-specific and a copied
+# pattern ignores another product's artifacts while leaving this one's tracked.
+.nddev-pi-cleanup/
+.nddev-pi-provider-backups/
+.nddev-pi-runtime/
+.nddev-pi-software/
+.nddev-pi-publish.*
+.nddev-pi-software-stage*
+.nddev-pi-managed-txn.*
+.*.nddev-pi-backups/
