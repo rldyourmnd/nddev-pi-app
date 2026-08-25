@@ -3,7 +3,7 @@
   "product_name": "nddev-pi-app",
   "display_name": "NDDev Pi Setup Manager",
   "description": "Portable, explicit-target setup manager for Pi Coding Agent configuration with a default-on native nddev-builder skill projection.",
-  "github_repository": "NDDev-it-com/nddev-pi-app",
+  "github_repository": "rldyourmnd/nddev-pi-app",
   "license": "AGPL-3.0-or-later",
   "manifest_ref": "build/manifest.json",
   "version_ref": "build/version.json",

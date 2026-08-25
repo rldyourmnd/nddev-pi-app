@@ -4,23 +4,29 @@ repository:
   display_name: "nddev-pi-app"
   roles:
     - "module"
-  lifecycle: "active"
+  lifecycle: "archived"
 provider:
   type: "github"
-  installation: "installation:github-organization"
+  installation: "installation:github-personal"
   repository_id: 1312851892
-  owner: "NDDev-it-com"
+  owner: "rldyourmnd"
   name: "nddev-pi-app"
+  # A transfer keeps the numeric repository id, so this is the same
+  # repository under a new locator. The previous one is retained:
+  # dropping it would break alias history for anything that resolved
+  # the repository by its old path.
+  aliases:
+    - owner: "NDDev-it-com"
+      name: "nddev-pi-app"
 classification:
   portfolios:
-    - "portfolio:organization-projects"
-    - "portfolio:public-modules"
+    - "portfolio:archived-projects"
   visibility_contract: "public"
   data_classification: "public"
 policy:
   profiles:
     - "repository-default"
-    - "organization-default"
+    - "personal-default"
     - "public-module"
   rollout_ring: "canary-modules"
 git:
